@@ -103,7 +103,12 @@
     [self log:@"%@ state: %@ (%d)", label, state, replicator.state];
 
     [replicator setDelegate:self];
-    [replicator start];
+    NSError *error;
+    if (![replicator startWithError:&error]) {
+        [self log:@"error starting %@ replicator: %@", label, error];
+        state = [CDTReplicator stringForReplicatorState:replicator.state];
+        [self log:@"%@ state: %@ (%d)", label, state, replicator.state];
+    }
 
     state = [CDTReplicator stringForReplicatorState:replicator.state];
     [self log:@"%@ state: %@ (%d)", label, state, replicator.state];
