@@ -108,6 +108,7 @@
         [self log:@"error starting %@ replicator: %@", label, error];
         state = [CDTReplicator stringForReplicatorState:replicator.state];
         [self log:@"%@ state: %@ (%d)", label, state, replicator.state];
+        return;
     }
 
     state = [CDTReplicator stringForReplicatorState:replicator.state];
