@@ -125,14 +125,17 @@ To use, just assign to the `delegate` property of the replicator object. **Note:
 this is a `weak` property, so the delegate needs to be strongly retained elsewhere,
 as otherwise its methods won't be called.
 
+Also, you must keep a strong reference to the CDTReplicator object or the delegate 
+methods will not be called. 
+
 ```objc
-// For this example, self retains the delegate
+// For this example, self retains the delegate and the CDTReplicator.
 self.replicationDelegate = /* alloc/init a sync delegate, or share one */;
 
 CDTPushReplication *pushReplication = [CDTPushReplication replicationWithSource:datastore
                                                                          target:remoteDatabaseURL];
 NSError *error;
-CDTReplicator *replicator = [replicatorFactory oneWay:pushReplication error:&error];
-replicator.delegate = self.replicationDelegate;
-[replicator start];
+self.replicator = [replicatorFactory oneWay:pushReplication error:&error];
+self.replicator.delegate = self.replicatorDelegate;
+[self.replicator start];
 ```
