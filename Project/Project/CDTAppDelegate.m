@@ -16,7 +16,7 @@
 #import "CDTAppDelegate.h"
 
 #import "CDTCompletedIndexer.h"
-
+#import "CDTTodoReplicator.h"
 #import <CloudantSync.h>
 
 @interface CDTAppDelegate()
@@ -43,16 +43,16 @@
 
     error = nil;
     CDTCompletedIndexer *fi = [[CDTCompletedIndexer alloc] init];
-    return [self.indexManager ensureIndexedWithIndexName:@"completed"
-                                                    type:CDTIndexTypeInteger
-                                                 indexer:fi
-                                                   error:&error];
-    if (error) {
+    BOOL ensuredIndex = [self.indexManager ensureIndexedWithIndexName:@"completed"
+                                                                 type:CDTIndexTypeInteger
+                                                              indexer:fi
+                                                                error:&error];
+    if (!ensuredIndex) {
         NSLog(@"Error creating indexManager: %@", error);
         exit(1);
     }
 
-
+    self.todoReplicator = [[CDTTodoReplicator alloc] init];
     
     return YES;
 }

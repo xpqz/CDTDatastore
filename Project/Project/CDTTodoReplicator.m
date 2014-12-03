@@ -25,6 +25,9 @@
 -(NSURL*)replicatorURL;
 -(void)startAndFollowReplicator:(CDTReplicator*)replicator label:(NSString*)label;
 
+@property (nonatomic, strong) CDTReplicator* pullReplicator;
+@property (nonatomic, strong) CDTReplicator* pushReplicator;
+
 @end
 
 @implementation CDTTodoReplicator
@@ -71,9 +74,16 @@
 
     CDTAppDelegate *delegate = (CDTAppDelegate *)[[UIApplication sharedApplication] delegate];
     CDTReplicatorFactory *factory = delegate.replicatorFactory;
-    CDTReplicator *replicator = [factory onewaySourceURI:url targetDatastore:delegate.datastore];
-
-    [self startAndFollowReplicator:replicator label:@"pull"];
+    CDTPullReplication * replicationConfig = [CDTPullReplication replicationWithSource:url
+                                                                                target:delegate.datastore];
+    NSError *error;
+    self.pullReplicator = [factory oneWay:replicationConfig error:&error];
+    if (!self.pullReplicator) {
+        [self log:@"Error creating pull replicator: %@", error];
+    }
+    else {
+        [self startAndFollowReplicator:self.pullReplicator label:@"pull"];
+    }
 }
 
 -(void)pushReplication
@@ -84,18 +94,22 @@
 
     CDTAppDelegate *delegate = (CDTAppDelegate *)[[UIApplication sharedApplication] delegate];
     CDTReplicatorFactory *factory = delegate.replicatorFactory;
-    CDTReplicator *replicator = [factory onewaySourceDatastore:delegate.datastore targetURI:url];
-
-    [self startAndFollowReplicator:replicator label:@"push"];
+    CDTPushReplication *replicationConfig = [CDTPushReplication replicationWithSource:delegate.datastore
+                                                                               target:url];
+    NSError *error;
+    self.pushReplicator = [factory oneWay:replicationConfig error:&error];
+    if (!self.pushReplicator) {
+        [self log:@"Error creating push replicator: %@", error];
+    }
+    else {
+        [self startAndFollowReplicator:self.pushReplicator label:@"push"];
+    }
 }
-
 /**
- Starts a replication and waits for it to complete using polling.
+ Starts a replication and sets self as the delegate
  
- Also adds this class as a listener to demo that functionality. In real
- apps, you'd probably use the replicatorDidComplete: and replicatorDidError:
- callbacks to do something useful, updating the UI or showing an error for
- example.
+ In real apps, you'd probably use the replicatorDidComplete: and replicatorDidError:
+ callbacks to do something useful, updating the UI or showing an error for example.
  */
 -(void)startAndFollowReplicator:(CDTReplicator*)replicator label:(NSString*)label {
 
@@ -103,6 +117,7 @@
     [self log:@"%@ state: %@ (%d)", label, state, replicator.state];
 
     [replicator setDelegate:self];
+    
     NSError *error;
     if (![replicator startWithError:&error]) {
         [self log:@"error starting %@ replicator: %@", label, error];
@@ -111,28 +126,6 @@
         return;
     }
 
-    state = [CDTReplicator stringForReplicatorState:replicator.state];
-    [self log:@"%@ state: %@ (%d)", label, state, replicator.state];
-
-    __weak CDTTodoReplicator *weakSelf = self;
-
-    dispatch_sync(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        while ([replicator isActive]) {
-            [NSThread sleepForTimeInterval:2.0f];
-
-            NSString *state = [CDTReplicator stringForReplicatorState:replicator.state];
-            [weakSelf log:@"%@ state: %@ (%d)", label, state, replicator.state];
-        }
-
-        NSString *state = [CDTReplicator stringForReplicatorState:replicator.state];
-        [weakSelf log:@"%@ state: %@ (%d)", label, state, replicator.state];
-
-        if (replicator.state == CDTReplicatorStateComplete || replicator.state == CDTReplicatorStateStopped) {
-            [weakSelf replicatorDidComplete:replicator];
-        } else if (replicator.state == CDTReplicatorStateError) {
-            [weakSelf replicatorDidError:replicator info:nil];
-        }
-    });
 }
 
 -(void)log:(NSString*)format, ... {
@@ -144,14 +137,49 @@
     NSLog(@"%@", message);
 }
 
-#pragma mark CDTReplicatorListener delegate
+#pragma mark CDTReplicatorDelegate
 
--(void)replicatorDidComplete:(CDTReplicator *)replicator {
-    [self log:@"complete"];
+-(void)replicatorDidComplete:(CDTReplicator *)replicator
+{
+    NSString *label = @"pull";
+    if (replicator == self.pushReplicator) {
+        label = @"push";
+    }
+    
+    [self log:@"%@ replicator complete", label];
 }
 
--(void)replicatorDidError:(CDTReplicator *)replicator info:(NSError *)info {
-    [self log:@"error: %@", info];
+-(void)replicatorDidError:(CDTReplicator *)replicator info:(NSError *)info
+{
+    NSString *label = @"pull";
+    if (replicator == self.pushReplicator) {
+        label = @"push";
+    }
+    
+    [self log:@"%@ replicator error: %@", label, info];
+}
+
+-(void)replicatorDidChangeState:(CDTReplicator *)replicator
+{
+    NSString *label = @"pull";
+    if (replicator == self.pushReplicator) {
+        label = @"push";
+    }
+    
+    NSString *state = [CDTReplicator stringForReplicatorState:replicator.state];
+    [self log:@"%@ new state: %@ (%d)", label, state, replicator.state];
+}
+
+-(void)replicatorDidChangeProgress:(CDTReplicator *)replicator
+{
+    NSString *label = @"pull";
+    if (replicator == self.pushReplicator) {
+        label = @"push";
+    }
+    
+    NSString *state = [CDTReplicator stringForReplicatorState:replicator.state];
+    [self log:@"%@ changes total %ld. changes processed %ld. state: %@ (%d)", label,
+     replicator.changesTotal, replicator.changesProcessed, state, replicator.state];
 }
 
 @end
